@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google TPUs 04 &mdash; Inside TPU v1</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg-primary:#0a0a0a; --bg-card:#0d1117; --bg-code:#161b22; --text-primary:#e6edf3; --text-secondary:#8b949e; --accent:#4285F4; --accent-dim:#4285F444; --accent-glow:#4285F433; --accent-2:#EA4335; --accent-3:#FBBC04; --accent-4:#34A853; --border:#21262d; --font-display:'Space Grotesk',sans-serif; --font-mono:'JetBrains Mono','Fira Code',monospace; --font-body:'Inter',sans-serif; --max-width:900px; }
+        *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+        html { scroll-behavior:smooth; }
+        body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-body); font-size:17px; line-height:1.7; overflow-x:hidden; }
+        .hero { min-height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:2rem 1.5rem; text-align:center; position:relative; }
+        .hero::before { content:''; position:absolute; top:0; left:50%; transform:translateX(-50%); width:700px; height:600px; background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%); pointer-events:none; z-index:0; }
+        .hero > * { position:relative; z-index:1; }
+        .series-label { font-family:var(--font-mono); font-size:0.85rem; color:var(--accent); letter-spacing:0.15em; text-transform:uppercase; margin-bottom:1rem; }
+        .hero h1 { font-family:var(--font-display); font-size:clamp(2rem,5vw,3.2rem); font-weight:700; line-height:1.2; margin-bottom:1rem; }
+        .hero h1 .accent { color:var(--accent); }
+        .hero .subtitle { font-size:1.1rem; color:var(--text-secondary); max-width:640px; margin-bottom:2rem; }
+        .tags { display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:center; margin-bottom:2.5rem; }
+        .tag { font-family:var(--font-mono); font-size:0.75rem; padding:0.25rem 0.75rem; border-radius:999px; border:1px solid var(--accent); color:var(--accent); background:var(--accent-dim); }
+        .pipeline { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:0.25rem; margin-bottom:1rem; max-width:var(--max-width); }
+        .pipeline-step { font-family:var(--font-mono); font-size:0.7rem; padding:0.3rem 0.7rem; background:var(--bg-card); border:1px solid var(--border); border-radius:4px; color:var(--text-secondary); }
+        .pipeline-arrow { color:var(--accent); font-size:0.9rem; font-weight:700; }
+        .slide { min-height:100vh; max-width:var(--max-width); margin:0 auto; padding:4rem 1.5rem; position:relative; display:flex; flex-direction:column; justify-content:center; }
+        .slide-number { font-family:var(--font-display); font-size:5rem; font-weight:700; color:var(--accent-dim); position:absolute; top:2rem; right:1.5rem; line-height:1; user-select:none; }
+        .slide h2 { font-family:var(--font-display); font-size:1.9rem; font-weight:700; color:var(--accent); margin-bottom:1.5rem; line-height:1.25; }
+        .slide h3 { font-family:var(--font-display); font-size:1.3rem; font-weight:600; color:var(--text-primary); margin-top:1.5rem; margin-bottom:0.75rem; }
+        .slide p { margin-bottom:1rem; color:var(--text-secondary); }
+        .slide p strong { color:var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom:1rem; padding-left:1.5rem; color:var(--text-secondary); }
+        .slide li { margin-bottom:0.4rem; }
+        .slide li strong { color:var(--text-primary); }
+        .table-wrap { overflow-x:auto; margin:1.25rem 0; border-radius:8px; border:1px solid var(--border); }
+        table { width:100%; border-collapse:collapse; font-size:0.9rem; }
+        th { background:var(--bg-code); color:var(--accent); font-weight:600; text-align:left; padding:0.75rem 1rem; border-bottom:1px solid var(--border); font-family:var(--font-display); white-space:nowrap; }
+        td { padding:0.6rem 1rem; border-bottom:1px solid var(--border); color:var(--text-secondary); vertical-align:top; }
+        tr:last-child td { border-bottom:none; }
+        tr:nth-child(even) td { background:rgba(13,17,23,0.5); }
+        .diagram-grid { display:grid; gap:0.75rem; margin:1.5rem 0; padding:1.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; }
+        .diagram-grid.cols-2 { grid-template-columns:1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns:1fr 1fr 1fr; }
+        .diagram-panel { padding:1rem; background:var(--bg-code); border:1px solid var(--border); border-radius:6px; }
+        .diagram-panel.accent-border { border-left:3px solid var(--accent); }
+        .diagram-panel.r { border-left:3px solid var(--accent-2); }
+        .diagram-panel.y { border-left:3px solid var(--accent-3); }
+        .diagram-panel.g { border-left:3px solid var(--accent-4); }
+        .diagram-panel h4 { font-family:var(--font-display); font-size:1rem; color:var(--accent); margin-bottom:0.5rem; }
+        .diagram-panel.r h4 { color:var(--accent-2); }
+        .diagram-panel.y h4 { color:var(--accent-3); }
+        .diagram-panel.g h4 { color:var(--accent-4); }
+        .diagram-panel p, .diagram-panel ul { font-size:0.9rem; }
+        .callout { background:var(--bg-card); border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:1rem 1.25rem; margin:1.25rem 0; }
+        .callout p { margin-bottom:0; }
+        .callout .callout-label { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.3rem; }
+        .canvas-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem; margin:1.25rem 0; overflow-x:auto; }
+        .canvas-wrap canvas, .canvas-wrap svg { display:block; margin:0 auto; max-width:100%; }
+        .code-block { background:var(--bg-code); border:1px solid var(--border); border-radius:8px; margin:1.25rem 0; overflow:hidden; }
+        .code-header { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); background:rgba(66,133,244,0.08); padding:0.4rem 1rem; border-bottom:1px solid var(--border); }
+        .code-block pre { margin:0; padding:1rem; overflow-x:auto; }
+        .code-block code { font-family:var(--font-mono); font-size:0.85rem; line-height:1.6; color:#c9d1d9; }
+        .kw{color:#ff7b72;} .fn{color:#d2a8ff;} .str{color:#a5d6ff;} .cm{color:#8b949e;font-style:italic;} .num{color:#79c0ff;} .type{color:#ffa657;}
+        .contents-list { list-style:none; padding-left:0; counter-reset:contents; }
+        .contents-list li { counter-increment:contents; padding:0.6rem 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:1rem; }
+        .contents-list li:last-child { border-bottom:none; }
+        .contents-list li::before { content:counter(contents,decimal-leading-zero); font-family:var(--font-mono); font-size:0.85rem; color:var(--accent); min-width:2rem; }
+        .contents-list a { color:var(--text-primary); text-decoration:none; }
+        .contents-list a:hover { color:var(--accent); }
+        .footer { text-align:center; padding:3rem 1.5rem; color:var(--text-secondary); font-size:0.85rem; border-top:1px solid var(--border); max-width:var(--max-width); margin:0 auto; }
+        .footer a { color:var(--accent); text-decoration:none; }
+        @media (max-width:640px) {
+            .slide { padding:3rem 1rem; min-height:auto; }
+            .slide-number { font-size:3rem; top:1.5rem; right:1rem; }
+            .slide h2 { font-size:1.5rem; }
+            .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns:1fr; }
+            .hero h1 { font-size:1.8rem; }
+            table { font-size:0.78rem; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">Google TPUs Series &mdash; Presentation 04</div>
+    <h1>Inside <span class="accent">TPU v1</span> &mdash; The 2015 Inference Chip</h1>
+    <p class="subtitle">A 28&nbsp;nm PCIe card with 65,536 8-bit MACs, 24 MiB SRAM, eight gigs of DDR3, and almost no instructions. The chip that proved a custom AI ASIC could ship.</p>
+    <div class="tags">
+        <span class="tag">28 nm</span><span class="tag">256×256 MAC</span>
+        <span class="tag">INT8</span><span class="tag">DDR3</span>
+        <span class="tag">PCIe Gen3</span><span class="tag">40 W</span>
+        <span class="tag">ISCA 2017</span>
+    </div>
+    <div class="pipeline">
+        <span class="pipeline-step">Host CPU</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">PCIe Gen3 ×16</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">DDR3 weights</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Weight FIFO</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">256×256 MMU</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Accumulators</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Activation</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Unified Buffer</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">A Block Diagram on One Slide</a></li>
+        <li><a href="#slide-02">The 256&times;256 Matrix Multiply Unit</a></li>
+        <li><a href="#slide-03">The 24 MiB Unified Buffer</a></li>
+        <li><a href="#slide-04">Accumulators and Activation Pipeline</a></li>
+        <li><a href="#slide-05">Why DDR3 and Not HBM</a></li>
+        <li><a href="#slide-06">The Brilliantly Minimal ISA</a></li>
+        <li><a href="#slide-07">PCIe Gen3 As The System Bus</a></li>
+        <li><a href="#slide-08">The Roofline &mdash; Why v1 Was Memory-Bound</a></li>
+        <li><a href="#slide-09">Workloads in 2015&ndash;2017</a></li>
+        <li><a href="#slide-10">What v1 Got Wrong (And v2 Fixed)</a></li>
+        <li><a href="#slide-11">What v1 Got Right (And v7 Still Has)</a></li>
+        <li><a href="#slide-12">Cheat Sheet</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>A Block Diagram on One Slide</h2>
+    <p>From Jouppi et al. ISCA 2017, the chip's logical structure is unusually clean. Five blocks plus a control unit.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 800 400" width="800" height="400" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .blk { fill:#161b22; stroke:#21262d; stroke-width:1; }
+                .blk.acc { fill:rgba(66,133,244,0.18); stroke:#4285F4; stroke-width:2; }
+                .blk.mem { fill:rgba(251,188,4,0.15); stroke:#FBBC04; stroke-width:1.5; }
+                .blk.dram { fill:rgba(234,67,53,0.15); stroke:#EA4335; stroke-width:1.5; }
+                .lbl { fill:#e6edf3; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:13px; text-anchor:middle; }
+                .sublbl { fill:#8b949e; font-family:'JetBrains Mono',monospace; font-size:10px; text-anchor:middle; }
+                .arr { stroke:#4285F4; stroke-width:1.4; fill:none; marker-end:url(#m1); }
+                .arr.hbm { stroke:#EA4335; }
+                .arr.ub { stroke:#FBBC04; }
+            </style>
+            <defs>
+                <marker id="m1" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#4285F4"/></marker>
+            </defs>
+            <!-- Host -->
+            <rect class="blk" x="20" y="170" width="100" height="60" rx="6"/>
+            <text class="lbl" x="70" y="195">Host CPU</text>
+            <text class="sublbl" x="70" y="212">PCIe Gen3 ×16</text>
+            <!-- PCIe arrow -->
+            <line class="arr" x1="125" y1="200" x2="170" y2="200"/>
+            <!-- Weight FIFO -->
+            <rect class="blk dram" x="170" y="40" width="120" height="60" rx="6"/>
+            <text class="lbl" x="230" y="65">DDR3 ×2</text>
+            <text class="sublbl" x="230" y="82">8 GiB / 34 GB/s</text>
+            <line class="arr hbm" x1="230" y1="100" x2="230" y2="135"/>
+            <rect class="blk mem" x="170" y="140" width="120" height="50" rx="6"/>
+            <text class="lbl" x="230" y="165">Weight FIFO</text>
+            <text class="sublbl" x="230" y="180">streams to MMU</text>
+            <!-- Unified Buffer -->
+            <rect class="blk mem" x="170" y="220" width="120" height="60" rx="6"/>
+            <text class="lbl" x="230" y="245">Unified Buffer</text>
+            <text class="sublbl" x="230" y="262">24 MiB</text>
+            <text class="sublbl" x="230" y="276">activations</text>
+            <line class="arr ub" x1="290" y1="170" x2="350" y2="170"/>
+            <line class="arr ub" x1="290" y1="250" x2="350" y2="250"/>
+            <!-- MMU -->
+            <rect class="blk acc" x="350" y="120" width="200" height="180" rx="6"/>
+            <text class="lbl" x="450" y="160">256 × 256</text>
+            <text class="lbl" x="450" y="180">Matrix Multiply Unit</text>
+            <text class="sublbl" x="450" y="200">65,536 INT8 MACs</text>
+            <text class="sublbl" x="450" y="216">700 MHz · 92 TOPS</text>
+            <text class="sublbl" x="450" y="232">weight-stationary</text>
+            <text class="sublbl" x="450" y="248">systolic array</text>
+            <!-- Accumulators -->
+            <line class="arr" x1="555" y1="210" x2="600" y2="210"/>
+            <rect class="blk acc" x="600" y="180" width="120" height="60" rx="6"/>
+            <text class="lbl" x="660" y="205">Accumulators</text>
+            <text class="sublbl" x="660" y="222">4 MiB INT32</text>
+            <!-- Activation pipeline -->
+            <line class="arr" x1="660" y1="240" x2="660" y2="280"/>
+            <rect class="blk" x="600" y="280" width="120" height="60" rx="6"/>
+            <text class="lbl" x="660" y="305">Activation</text>
+            <text class="sublbl" x="660" y="322">ReLU, pool, norm</text>
+            <!-- back to UB -->
+            <path class="arr" d="M 600 310 Q 540 310 530 290 L 290 250" stroke-dasharray="3 3"/>
+            <text class="sublbl" x="500" y="305">writeback to UB</text>
+            <!-- control -->
+            <rect class="blk" x="350" y="320" width="200" height="40" rx="6"/>
+            <text class="lbl" x="450" y="343">Control / instr buffer (host-issued)</text>
+            <line class="arr" x1="450" y1="320" x2="450" y2="305"/>
+            <line class="arr" x1="450" y1="320" x2="660" y2="340"/>
+        </svg>
+    </div>
+
+    <p>The whole machine is a streaming pipeline: host CPU dispatches a CISC instruction over PCIe, weights are pulled from DDR3 through a FIFO into the MMU, activations come from the on-chip Unified Buffer, the systolic array does the matmul, results land in the 4 MiB accumulator SRAM, the activation pipeline applies ReLU/pool/normalize, and the result writes back into the Unified Buffer for the next layer.</p>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>The 256&times;256 Matrix Multiply Unit</h2>
+    <p>The MMU is the chip's centre of gravity &mdash; the part where almost all the silicon and almost all the power live.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>What's in each PE</h4>
+            <ul>
+                <li>One INT8 multiplier (8&times;8 &rarr; 16-bit product).</li>
+                <li>One 16-bit (or 32-bit) adder.</li>
+                <li>One register holding the resident weight.</li>
+                <li>One register for the activation arriving from the left.</li>
+                <li>One register for the partial sum descending from above.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel y">
+            <h4>The 65,536 PE budget</h4>
+            <ul>
+                <li>256 &times; 256 = <strong>65,536 PEs</strong>.</li>
+                <li>One INT8 multiply &amp; one 32-bit add per PE per cycle.</li>
+                <li>700 MHz clock &rarr; <strong>92 TOPS</strong> peak.</li>
+                <li>~24 W typical, ~40 W max chip-wide; the array dominates the power budget.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Weight-stationary loading</h3>
+    <p>Before each matmul the host issues a <code>READ_WEIGHTS</code> instruction. The Weight FIFO buffers a 256&times;256 tile from DDR3 into a staging area, and on the next cycle it is committed into the array's weight registers. Activations then flow in from the left of the Unified Buffer, skewed by row to align with the systolic schedule. Partial sums propagate top-to-bottom and emerge into the accumulators.</p>
+
+    <h3>The clock-rate choice</h3>
+    <p>700 MHz looks low next to a 2014 Xeon (3+ GHz). It's deliberate: 65,536 multipliers all switching simultaneously is a power and clock-distribution problem, not a transistor problem. Doubling the clock would have doubled power without proportionally doubling throughput once thermal limits hit. The TPU trades clock for parallelism &mdash; same total work, lower V&sup2;f.</p>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>The 24 MiB Unified Buffer</h2>
+    <p>The Unified Buffer is the chip's working set for activations. It is software-visible and software-managed &mdash; <em>not</em> a cache. Every read and write is explicit in the program.</p>
+
+    <ul>
+        <li><strong>24 MiB total</strong>, multi-banked.</li>
+        <li>Read bandwidth designed to feed one row of activations into the MMU per cycle, plus simultaneous writeback from accumulators.</li>
+        <li>No tags, no replacement policy, no coherence. The compiler decides what lives where.</li>
+    </ul>
+
+    <h3>Why a scratchpad and not a cache?</h3>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Cache costs you don't want</h4>
+            <ul>
+                <li>Tag arrays burn area and power.</li>
+                <li>Replacement state machines.</li>
+                <li>Unpredictable miss-rate variation.</li>
+                <li>Coherence protocols if multi-port.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel g">
+            <h4>Scratchpad costs you do want</h4>
+            <ul>
+                <li>Just SRAM cells &mdash; ~50% denser.</li>
+                <li>Compiler-controlled, deterministic.</li>
+                <li>Predictable latency (worst-case = average).</li>
+                <li>Easy to reason about for tile-size selection.</li>
+            </ul>
+        </div>
+    </div>
+
+    <p>The scratchpad model only works if you have a compiler that can plan the working set ahead of time. ML graphs &mdash; with their statically known shapes &mdash; are exactly the workload where this is tractable. Try the same approach on a database query and you'd lose; on a transformer it's a massive win.</p>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Accumulators and Activation Pipeline</h2>
+    <p>Once the MMU drains its outputs, two more dedicated units finish the layer:</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel y">
+            <h4>4 MiB Accumulator SRAM</h4>
+            <ul>
+                <li>INT32 accumulators, 4096 rows of 256 elements each (Jouppi et al.).</li>
+                <li>Sized to hold a few full output tiles concurrently.</li>
+                <li>Allows partial-sum accumulation across multiple tile passes &mdash; essential for matmuls where the contraction dimension exceeds 256.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Activation pipeline</h4>
+            <ul>
+                <li>Hardwired ReLU, sigmoid, tanh, max-pool, average-pool, normalisation.</li>
+                <li>All of these are cheap and fixed-function &mdash; the chip pays nothing for what it doesn't support, and the compiler emits one of them per layer end.</li>
+                <li>Writes back into the Unified Buffer for the next layer's input.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>What's notably missing</h3>
+    <p>No softmax, no attention, no division, no general-purpose vector unit. v1 was designed for the 2014 inference workload, which was almost entirely <strong>convolutions plus dense layers plus ReLU plus pooling</strong>. Anything fancier ran on the host CPU, which sometimes meant pulling tensors back across PCIe &mdash; expensive, and one of the first things v2 fixed by adding a real vector unit per TensorCore.</p>
+
+    <div class="callout">
+        <div class="callout-label">A specifically pre-Transformer chip</div>
+        <p>The Transformer paper (Vaswani et al.) did not appear until June 2017, after v1 was already in production. v1 has no native softmax, no efficient broadcast for attention scores, and no fast small-matmul path. Transformer inference on v1 worked &mdash; AlphaGo's policy/value networks are convnets &mdash; but it was already obvious by 2016 that the next chip would need different building blocks.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>Why DDR3 and Not HBM</h2>
+    <p>The single most second-guessed decision in v1's design. With hindsight everyone knows v1 was bandwidth-bound. The choice was made for two real reasons:</p>
+
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel y">
+            <h4>HBM was new in 2014</h4>
+            <ul>
+                <li>JEDEC HBM1 standard finalised October 2013.</li>
+                <li>First HBM products (AMD Fiji, NVIDIA P100) shipped 2015&ndash;16.</li>
+                <li>HBM controllers were expensive and immature; risky for a 2014 design.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel g">
+            <h4>v1 only stored weights</h4>
+            <ul>
+                <li>Inference: weights are read-only, loaded once, then re-used.</li>
+                <li>Activations live in the on-chip Unified Buffer.</li>
+                <li>So the off-chip bandwidth requirement <em>seemed</em> modest at design time: stream the weight set per inference batch.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel r">
+            <h4>The shipping discipline</h4>
+            <ul>
+                <li>The team had 15 months to a datacenter.</li>
+                <li>A 28&nbsp;nm chip with a DDR3 controller was a known-buildable thing.</li>
+                <li>Trade off optimal for shippable.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>The actual numbers</h3>
+    <ul>
+        <li><strong>2 channels of DDR3-2133</strong>, ~17 GB/s each, ~34 GB/s aggregate.</li>
+        <li><strong>8 GiB total</strong> (4 GiB per channel) &mdash; enough for the weight tensors of every model Google ran in 2015.</li>
+        <li>For comparison: v2 in 2017 has 16 GiB HBM at ~600 GB/s &mdash; 17&times; the bandwidth in two years.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">Why Jouppi calls this the chip's most important lesson</div>
+        <p>The ISCA 2017 paper's roofline plot shows v1 sitting <em>far</em> below its compute roof on most workloads, pinned by DRAM bandwidth. Convnets were close to compute-bound; LSTMs were 5&times; below peak; embedding-heavy models were 10&times; below peak. The "what should v2 do?" question almost answered itself: <em>add HBM</em>. Every TPU since has had it.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>The Brilliantly Minimal ISA</h2>
+    <p>v1's instruction set is roughly twelve CISC instructions. The host CPU sends them over PCIe; the chip executes them in order. There is no branch, no condition codes, no exception, no virtual memory, no caches.</p>
+
+    <div class="code-block">
+        <div class="code-header">tpu v1 — representative instruction set (illustrative; exact mnemonics from ISCA 2017)</div>
+        <pre><code><span class="cm">// Bring weight tile from DDR3 through the FIFO into the MMU</span>
+<span class="kw">READ_WEIGHTS</span>  &lt;dram_addr&gt;, &lt;tile_shape&gt;
+
+<span class="cm">// Bring activations from host memory into the Unified Buffer</span>
+<span class="kw">READ_HOST_MEMORY</span> &lt;host_addr&gt;, &lt;ub_addr&gt;, &lt;size&gt;
+
+<span class="cm">// Run the matmul: stream activations, drain to accumulators</span>
+<span class="kw">MATRIX_MULTIPLY</span>  &lt;ub_in&gt;, &lt;acc_dst&gt;, &lt;rows&gt;, &lt;cols&gt;
+
+<span class="cm">// Apply non-linearity / pool / norm and write back to Unified Buffer</span>
+<span class="kw">ACTIVATE</span>         &lt;acc_src&gt;, &lt;ub_dst&gt;, &lt;op = relu | pool | norm&gt;
+
+<span class="cm">// Send a tensor back to the host over PCIe</span>
+<span class="kw">WRITE_HOST_MEMORY</span> &lt;ub_addr&gt;, &lt;host_addr&gt;, &lt;size&gt;
+</code></pre>
+    </div>
+
+    <h3>What's not in the ISA</h3>
+    <ul>
+        <li><strong>No conditional branch.</strong> Programs are straight-line streams.</li>
+        <li><strong>No floating point.</strong> INT8 in, INT32 accumulate, INT8 (re-quantised) out.</li>
+        <li><strong>No interrupts.</strong> The host polls completion bits.</li>
+        <li><strong>No virtual memory.</strong> The chip sees physical addresses pinned by the host driver.</li>
+        <li><strong>No traps, no exceptions.</strong> Bus errors halt the chip; the driver handles recovery.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">The Jouppi-MIPS lineage in plain sight</div>
+        <p>This is RISC discipline taken to its endpoint. The MIPS lesson was "compiler does the scheduling, hardware does the work". v1 takes it a step further: <em>the host CPU does the control flow, the TPU just does the work</em>. Every instruction is a coarse, well-typed action. The chip never has to make a runtime decision &mdash; which is why it can ship in 15 months with confidence.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>PCIe Gen3 As The System Bus</h2>
+    <p>v1 is a PCIe Gen3 &times;16 card. The host link runs at ~16 GB/s in each direction, of which ~12.5 GB/s is usable bandwidth.</p>
+
+    <h3>What flows over PCIe</h3>
+    <ul>
+        <li>Instructions from the host control program.</li>
+        <li>Input activations for each inference (image bytes, embedding lookups, etc.).</li>
+        <li>Final output tensors back to the host.</li>
+        <li><em>Not</em> weights &mdash; weights live in the chip's DDR3 and are loaded at model-load time.</li>
+    </ul>
+
+    <h3>Why this works for inference</h3>
+    <p>An inference query is: 1 small input tensor in &rarr; many matmuls on-chip &rarr; 1 small output tensor out. PCIe is fine for the small tensors at the boundary. The on-chip work dominates by orders of magnitude. An H100 GPU faces the same bandwidth picture and reaches the same conclusion &mdash; the host bus is for control and I/O, not for the inner loop.</p>
+
+    <div class="callout">
+        <div class="callout-label">Why this stops working for training</div>
+        <p>For training, gradients need to be all-reduced across a cluster of chips. If the only inter-chip path is PCIe-to-PCIe through the host CPU, you spend more time on the host than on the chip. <strong>v2 fixes this with ICI &mdash; a custom chip-to-chip interconnect that bypasses the host entirely.</strong> That single change is what turns the TPU from an inference card into a training supercomputer.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>The Roofline &mdash; Why v1 Was Memory-Bound</h2>
+    <p>The most-quoted figure from the ISCA 2017 paper is the roofline plot. It says: <em>plot operational intensity (ops per byte) on the X axis, achieved performance (ops per second) on the Y axis</em>. The peak compute is a horizontal line at 92 TOPS; the memory roof rises from the origin at slope 34 GB/s.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 700 360" width="700" height="360" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .ax { stroke:#21262d; stroke-width:1; }
+                .gr { stroke:#161b22; stroke-dasharray:2 3; }
+                .roof-c { stroke:#4285F4; stroke-width:2.5; fill:none; }
+                .roof-m { stroke:#EA4335; stroke-width:2.5; fill:none; stroke-dasharray:5 5; }
+                .pt { fill:#FBBC04; stroke:#FBBC04; }
+                .lbl { fill:#8b949e; font-family:'JetBrains Mono',monospace; font-size:11px; }
+                .ann { fill:#e6edf3; font-family:'Space Grotesk',sans-serif; font-size:12px; }
+            </style>
+            <text x="20" y="22" class="ann">Roofline — TPU v1 (log-log, schematic)</text>
+            <line class="ax" x1="60" y1="320" x2="660" y2="320"/>
+            <line class="ax" x1="60" y1="40" x2="60" y2="320"/>
+            <text x="650" y="338" class="lbl" text-anchor="end">operational intensity (ops/byte) →</text>
+            <text x="60" y="35" class="lbl" text-anchor="end">↑ TOPS</text>
+            <!-- gridlines -->
+            <line class="gr" x1="160" y1="40" x2="160" y2="320"/>
+            <line class="gr" x1="280" y1="40" x2="280" y2="320"/>
+            <line class="gr" x1="400" y1="40" x2="400" y2="320"/>
+            <line class="gr" x1="520" y1="40" x2="520" y2="320"/>
+            <text x="160" y="338" class="lbl" text-anchor="middle">10</text>
+            <text x="280" y="338" class="lbl" text-anchor="middle">100</text>
+            <text x="400" y="338" class="lbl" text-anchor="middle">1k</text>
+            <text x="520" y="338" class="lbl" text-anchor="middle">10k</text>
+            <line class="gr" x1="60" y1="220" x2="660" y2="220"/>
+            <line class="gr" x1="60" y1="120" x2="660" y2="120"/>
+            <text x="56" y="223" class="lbl" text-anchor="end">9.2</text>
+            <text x="56" y="123" class="lbl" text-anchor="end">92</text>
+            <!-- compute roof at 92 TOPS = y=120, kink at intensity ~2700 (92e12 / 34e9) -->
+            <line class="roof-c" x1="430" y1="120" x2="660" y2="120"/>
+            <text x="640" y="115" class="lbl" text-anchor="end" fill="#4285F4">peak compute 92 TOPS</text>
+            <!-- memory roof: log-log line slope 1, passing through (3 MIN/byte, ~92 TOPS) at 34 GB/s -->
+            <line class="roof-m" x1="60" y1="320" x2="430" y2="120"/>
+            <text x="120" y="220" class="lbl" fill="#EA4335">DDR3 roof = 34 GB/s</text>
+            <!-- workload points -->
+            <circle class="pt" cx="180" cy="280" r="6"/><text x="190" y="284" class="lbl">LSTM0 (~14 ops/byte)</text>
+            <circle class="pt" cx="220" cy="265" r="6"/><text x="230" y="270" class="lbl">LSTM1 (~22)</text>
+            <circle class="pt" cx="280" cy="245" r="6"/><text x="290" y="250" class="lbl">MLP (~85)</text>
+            <circle class="pt" cx="380" cy="170" r="6"/><text x="390" y="172" class="lbl">CNN0 (~620)</text>
+            <circle class="pt" cx="430" cy="125" r="6"/><text x="440" y="125" class="lbl">CNN1 (~2900) — compute-bound</text>
+        </svg>
+    </div>
+
+    <p>The plot is schematic; the workload labels follow Jouppi et al. CNN1 (which is convolution-heavy, like AlexNet) sits at the kink &mdash; achieving close to peak. LSTMs sit far below the memory roof &mdash; bandwidth-starved. <strong>Half the production workloads in 2016 looked more like the LSTMs than the CNNs.</strong></p>
+
+    <div class="callout">
+        <div class="callout-label">The lesson that designs every later TPU</div>
+        <p>v1's cleanest architectural lesson, repeated explicitly in the CACM 2020 paper for v2/v3: <em>your peak FLOPS number is irrelevant if your bandwidth roof is below it for the workloads you actually run</em>. Every later TPU pays disproportionately more for memory than for compute &mdash; HBM2 in v2/v3, HBM2 + CMEM in v4/v4i, HBM3e in Ironwood at 7.4 TB/s per chip. The compute is easy; feeding it is hard.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>Workloads in 2015&ndash;2017</h2>
+    <p>What v1 actually ran in production. From the ISCA paper plus subsequent disclosures:</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>System</th><th>Model class</th><th>Why TPU</th></tr></thead>
+            <tbody>
+                <tr><td><strong>RankBrain</strong> (Search)</td><td>Deep neural net for query interpretation</td><td>Latency-sensitive; 10s of billions of queries/day; perf/W matters more than peak.</td></tr>
+                <tr><td><strong>Google Translate</strong> (NMT)</td><td>Encoder-decoder LSTM (later GNMT)</td><td>Large model parameters; bandwidth-bound on v1; still cheaper than CPU.</td></tr>
+                <tr><td><strong>Google Photos</strong></td><td>CNN classifier / labeller</td><td>Compute-bound &mdash; near-ideal v1 workload (CNN1 in the roofline).</td></tr>
+                <tr><td><strong>Street View</strong></td><td>CNN OCR</td><td>Compute-bound batch inference at huge scale.</td></tr>
+                <tr><td><strong>Voice / Now / Assistant</strong></td><td>Acoustic model + language model</td><td>Latency-sensitive, real-time.</td></tr>
+                <tr><td><strong>AlphaGo</strong></td><td>Policy + value CNNs</td><td>The headline workload &mdash; Lee Sedol match, March 2016.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>The fleet picture</h3>
+    <p>By the time of the May 2016 announcement, v1s were running in <em>tens of thousands</em> in Google datacenters &mdash; an actual production fleet, not a benchmark. The ISCA 2017 paper presents <em>measured</em> performance per workload across the production fleet; that's why the numbers are quoted across very specific named models and not synthetic benchmarks.</p>
+
+    <div class="callout">
+        <div class="callout-label">Why this matters for the rest of the industry</div>
+        <p>v1 is the first time a custom AI ASIC was demonstrated at hyperscale, with measured wins, on real workloads. It is the existence-proof that justifies every other AI chip startup's pitch deck since 2016. <strong>The right comparison is "v1 vs Haswell + K80 in production" &mdash; not "v1 vs anything in a benchmark".</strong></p>
+    </div>
+</section>
+
+<section class="slide" id="slide-10">
+    <div class="slide-number">10</div>
+    <h2>What v1 Got Wrong (And v2 Fixed)</h2>
+    <ul>
+        <li><strong>DDR3 instead of HBM.</strong> Bandwidth-starved on LSTM and embedding workloads. v2 ships with HBM2.</li>
+        <li><strong>INT8 only, no floating point.</strong> Made post-training quantisation mandatory; precluded training on the chip. v2 introduces bfloat16.</li>
+        <li><strong>No inter-chip interconnect.</strong> Multi-chip jobs went through PCIe-via-host. v2 introduces ICI for chip-to-chip and 2D-torus pods.</li>
+        <li><strong>No softmax / division / fancy ops.</strong> Anything non-trivial fell back to the host. v2 adds a real vector unit per TensorCore.</li>
+        <li><strong>One MMU, one TensorCore.</strong> v2 has two TensorCores per chip; v3 doubles MXU count again.</li>
+        <li><strong>Manual quantisation pipeline.</strong> Every model needed an INT8 calibration step; v2's bf16 lets you train and serve in the same numeric.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">How quickly the lessons turn into silicon</div>
+        <p>v1 ships to datacenter mid-2015. v2 announced May 2017 &mdash; about <strong>22 months</strong> later. Every architectural fix above is in v2. This is the cadence the TPU programme has held ever since: ship, learn, fix in the next chip, ship again.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-11">
+    <div class="slide-number">11</div>
+    <h2>What v1 Got Right (And v7 Still Has)</h2>
+    <ul>
+        <li><strong>Weight-stationary systolic core.</strong> Every TPU since has been built around the same 2D MAC array. The 256&times;256 of v1 became 128&times;128 (smaller, more numerous) on v2 onwards, but the structure is identical.</li>
+        <li><strong>Software-managed scratchpad memory.</strong> The Unified Buffer is the direct ancestor of VMEM and CMEM in modern TPUs.</li>
+        <li><strong>Compiler does the scheduling.</strong> v1's host-issued CISC ops are an early form of what XLA emits for modern chips. The chip never schedules anything itself.</li>
+        <li><strong>Drop-in PCIe form factor.</strong> v4i and v5e still drop into existing servers; the integration cost is low.</li>
+        <li><strong>Quantitative roofline thinking.</strong> Every TPU paper has a roofline plot. The mental model has not changed.</li>
+        <li><strong>Ship discipline.</strong> 15 months from concept to datacenter. Later TPUs have taken longer (more verification, more partners) but the bias toward conservative, manufacturable choices is preserved.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">The continuity argument</div>
+        <p>If you walked an engineer from the v1 team into a 2025 TPU bring-up lab, almost everything would be familiar in form: a weight FIFO, a systolic MMU, a vector unit, a software-managed buffer, a host-issued instruction stream, a roofline plot pinned to a wall. The dimensions are different by orders of magnitude; the ideas are not.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-12">
+    <div class="slide-number">12</div>
+    <h2>Cheat Sheet</h2>
+    <ul>
+        <li><strong>TSMC 28&nbsp;nm</strong>, &lt;331&nbsp;mm&sup2; die. PCIe Gen3 &times;16 form factor; ~24&ndash;40 W.</li>
+        <li><strong>One 256&times;256 INT8 systolic MMU</strong> at 700 MHz &rarr; <strong>92 TOPS</strong> peak.</li>
+        <li><strong>24 MiB on-chip Unified Buffer</strong> for activations, software-managed (not a cache).</li>
+        <li><strong>4 MiB INT32 accumulator SRAM</strong>, fixed-function activation pipeline (ReLU, pool, norm).</li>
+        <li><strong>8 GiB DDR3-2133</strong>, dual-channel, ~34 GB/s &mdash; the chip's biggest constraint.</li>
+        <li><strong>~12 CISC instructions</strong>, host-issued over PCIe. No branch, no FP, no VM, no interrupts.</li>
+        <li><strong>Bandwidth-bound</strong> on most workloads except CNNs &mdash; the lesson v2 fixes with HBM.</li>
+        <li>Production fleet ran RankBrain, Translate, Photos, Street View, AlphaGo from 2015&ndash;2017.</li>
+        <li>The brilliance is not in any one feature &mdash; it's in <strong>what's not there</strong>. The chip is what's left when you remove everything that wasn't doing matmul.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">Read next</div>
+        <p>Deck <strong>05 &mdash; v2 &amp; v3, the Training Era</strong> walks the chip that fixes v1's biggest limitations: HBM, bf16, 2D torus pod, ICI.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Google_TPUs">Google TPUs</a> series. Sources: Jouppi et al., "In-Datacenter Performance Analysis of a Tensor Processing Unit", ISCA 2017 (arXiv:1704.04760); Google Cloud Blog, "An in-depth look at the first TPU" (May 2016).</p>
+</footer>
+
+</body>
+</html>
