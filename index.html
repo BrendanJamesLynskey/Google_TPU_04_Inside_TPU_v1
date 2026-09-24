@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root { --bg-primary:#0a0a0a; --bg-card:#0d1117; --bg-code:#161b22; --text-primary:#e6edf3; --text-secondary:#8b949e; --accent:#4285F4; --accent-dim:#4285F444; --accent-glow:#4285F433; --accent-2:#EA4335; --accent-3:#FBBC04; --accent-4:#34A853; --border:#21262d; --font-display:'Space Grotesk',sans-serif; --font-mono:'JetBrains Mono','Fira Code',monospace; --font-body:'Inter',sans-serif; --max-width:900px; }
+        :root { --bg-primary:#f3efe6; --bg-card:#ebe6da; --bg-code:#e2dcce; --text-primary:#1b1a18; --text-secondary:#625c52; --accent:#355ec6; --accent-dim:#355ec644; --accent-glow:#355ec61a; --accent-2:#ee3218; --accent-3:#8b6a0d; --accent-4:#458f5d; --border:#d0c9b8; --font-display:'Space Grotesk',sans-serif; --font-mono:'JetBrains Mono','Fira Code',monospace; --font-body:'Inter',sans-serif; --max-width:900px; }
         *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
         html { scroll-behavior:smooth; }
         body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-body); font-size:17px; line-height:1.7; overflow-x:hidden; }
@@ -38,7 +38,7 @@
         th { background:var(--bg-code); color:var(--accent); font-weight:600; text-align:left; padding:0.75rem 1rem; border-bottom:1px solid var(--border); font-family:var(--font-display); white-space:nowrap; }
         td { padding:0.6rem 1rem; border-bottom:1px solid var(--border); color:var(--text-secondary); vertical-align:top; }
         tr:last-child td { border-bottom:none; }
-        tr:nth-child(even) td { background:rgba(13,17,23,0.5); }
+        tr:nth-child(even) td { background:rgba(235,230,218,0.5); }
         .diagram-grid { display:grid; gap:0.75rem; margin:1.5rem 0; padding:1.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; }
         .diagram-grid.cols-2 { grid-template-columns:1fr 1fr; }
         .diagram-grid.cols-3 { grid-template-columns:1fr 1fr 1fr; }
@@ -58,10 +58,10 @@
         .canvas-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem; margin:1.25rem 0; overflow-x:auto; }
         .canvas-wrap canvas, .canvas-wrap svg { display:block; margin:0 auto; max-width:100%; }
         .code-block { background:var(--bg-code); border:1px solid var(--border); border-radius:8px; margin:1.25rem 0; overflow:hidden; }
-        .code-header { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); background:rgba(66,133,244,0.08); padding:0.4rem 1rem; border-bottom:1px solid var(--border); }
+        .code-header { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); background:rgba(53,94,198,0.08); padding:0.4rem 1rem; border-bottom:1px solid var(--border); }
         .code-block pre { margin:0; padding:1rem; overflow-x:auto; }
-        .code-block code { font-family:var(--font-mono); font-size:0.85rem; line-height:1.6; color:#c9d1d9; }
-        .kw{color:#ff7b72;} .fn{color:#d2a8ff;} .str{color:#a5d6ff;} .cm{color:#8b949e;font-style:italic;} .num{color:#79c0ff;} .type{color:#ffa657;}
+        .code-block code { font-family:var(--font-mono); font-size:0.85rem; line-height:1.6; color:#2f2d29; }
+        .kw{color:#bb3023;} .fn{color:#452a68;} .str{color:#182d4d;} .cm{color:#625c52;font-style:italic;} .num{color:#143c76;} .type{color:#af771b;}
         .contents-list { list-style:none; padding-left:0; counter-reset:contents; }
         .contents-list li { counter-increment:contents; padding:0.6rem 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:1rem; }
         .contents-list li:last-child { border-bottom:none; }
@@ -131,18 +131,18 @@
     <div class="canvas-wrap">
         <svg viewBox="0 0 800 400" width="800" height="400" xmlns="http://www.w3.org/2000/svg">
             <style>
-                .blk { fill:#161b22; stroke:#21262d; stroke-width:1; }
-                .blk.acc { fill:rgba(66,133,244,0.18); stroke:#4285F4; stroke-width:2; }
-                .blk.mem { fill:rgba(251,188,4,0.15); stroke:#FBBC04; stroke-width:1.5; }
-                .blk.dram { fill:rgba(234,67,53,0.15); stroke:#EA4335; stroke-width:1.5; }
-                .lbl { fill:#e6edf3; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:13px; text-anchor:middle; }
-                .sublbl { fill:#8b949e; font-family:'JetBrains Mono',monospace; font-size:10px; text-anchor:middle; }
-                .arr { stroke:#4285F4; stroke-width:1.4; fill:none; marker-end:url(#m1); }
-                .arr.hbm { stroke:#EA4335; }
-                .arr.ub { stroke:#FBBC04; }
+                .blk { fill:#e2dcce; stroke:#d0c9b8; stroke-width:1; }
+                .blk.acc { fill:rgba(53,94,198,0.18); stroke:#355ec6; stroke-width:2; }
+                .blk.mem { fill:rgba(139,106,13,0.15); stroke:#8b6a0d; stroke-width:1.5; }
+                .blk.dram { fill:rgba(238,50,24,0.15); stroke:#ee3218; stroke-width:1.5; }
+                .lbl { fill:#1b1a18; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:13px; text-anchor:middle; }
+                .sublbl { fill:#625c52; font-family:'JetBrains Mono',monospace; font-size:10px; text-anchor:middle; }
+                .arr { stroke:#355ec6; stroke-width:1.4; fill:none; marker-end:url(#m1); }
+                .arr.hbm { stroke:#ee3218; }
+                .arr.ub { stroke:#8b6a0d; }
             </style>
             <defs>
-                <marker id="m1" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#4285F4"/></marker>
+                <marker id="m1" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#355ec6"/></marker>
             </defs>
             <!-- Host -->
             <rect class="blk" x="20" y="170" width="100" height="60" rx="6"/>
@@ -414,13 +414,13 @@
     <div class="canvas-wrap">
         <svg viewBox="0 0 700 360" width="700" height="360" xmlns="http://www.w3.org/2000/svg">
             <style>
-                .ax { stroke:#21262d; stroke-width:1; }
-                .gr { stroke:#161b22; stroke-dasharray:2 3; }
-                .roof-c { stroke:#4285F4; stroke-width:2.5; fill:none; }
-                .roof-m { stroke:#EA4335; stroke-width:2.5; fill:none; stroke-dasharray:5 5; }
-                .pt { fill:#FBBC04; stroke:#FBBC04; }
-                .lbl { fill:#8b949e; font-family:'JetBrains Mono',monospace; font-size:11px; }
-                .ann { fill:#e6edf3; font-family:'Space Grotesk',sans-serif; font-size:12px; }
+                .ax { stroke:#d0c9b8; stroke-width:1; }
+                .gr { stroke:#e2dcce; stroke-dasharray:2 3; }
+                .roof-c { stroke:#355ec6; stroke-width:2.5; fill:none; }
+                .roof-m { stroke:#ee3218; stroke-width:2.5; fill:none; stroke-dasharray:5 5; }
+                .pt { fill:#8b6a0d; stroke:#8b6a0d; }
+                .lbl { fill:#625c52; font-family:'JetBrains Mono',monospace; font-size:11px; }
+                .ann { fill:#1b1a18; font-family:'Space Grotesk',sans-serif; font-size:12px; }
             </style>
             <text x="20" y="22" class="ann">Roofline — TPU v1 (log-log, schematic)</text>
             <line class="ax" x1="60" y1="320" x2="660" y2="320"/>
@@ -442,10 +442,10 @@
             <text x="56" y="123" class="lbl" text-anchor="end">92</text>
             <!-- compute roof at 92 TOPS = y=120, kink at intensity ~2700 (92e12 / 34e9) -->
             <line class="roof-c" x1="430" y1="120" x2="660" y2="120"/>
-            <text x="640" y="115" class="lbl" text-anchor="end" fill="#4285F4">peak compute 92 TOPS</text>
+            <text x="640" y="115" class="lbl" text-anchor="end" fill="#355ec6">peak compute 92 TOPS</text>
             <!-- memory roof: log-log line slope 1, passing through (3 MIN/byte, ~92 TOPS) at 34 GB/s -->
             <line class="roof-m" x1="60" y1="320" x2="430" y2="120"/>
-            <text x="120" y="220" class="lbl" fill="#EA4335">DDR3 roof = 34 GB/s</text>
+            <text x="120" y="220" class="lbl" fill="#ee3218">DDR3 roof = 34 GB/s</text>
             <!-- workload points -->
             <circle class="pt" cx="180" cy="280" r="6"/><text x="190" y="284" class="lbl">LSTM0 (~14 ops/byte)</text>
             <circle class="pt" cx="220" cy="265" r="6"/><text x="230" y="270" class="lbl">LSTM1 (~22)</text>
