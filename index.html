@@ -219,7 +219,7 @@
                 <li>256 &times; 256 = <strong>65,536 PEs</strong>.</li>
                 <li>One INT8 multiply &amp; one 32-bit add per PE per cycle.</li>
                 <li>700 MHz clock &rarr; <strong>92 TOPS</strong> peak.</li>
-                <li>~24 W typical, ~40 W max chip-wide; the array dominates the power budget.</li>
+                <li>~28 W idle, ~40 W busy, 75 W TDP chip-wide; the array dominates the power budget.</li>
             </ul>
         </div>
     </div>
@@ -341,7 +341,7 @@
 
     <div class="callout">
         <div class="callout-label">Why Jouppi calls this the chip's most important lesson</div>
-        <p>The ISCA 2017 paper's roofline plot shows v1 sitting <em>far</em> below its compute roof on most workloads, pinned by DRAM bandwidth. Convnets were close to compute-bound; LSTMs were 5&times; below peak; embedding-heavy models were 10&times; below peak. The "what should v2 do?" question almost answered itself: <em>add HBM</em>. Every TPU since has had it.</p>
+        <p>The ISCA 2017 paper's roofline plot shows v1 sitting <em>far</em> below its compute roof on most workloads, pinned by DRAM bandwidth. CNN0 reached 86 of 92 TOPS; the MLPs managed 9.7&ndash;12.3 TOPS and the LSTMs only 2.8&ndash;3.7. The "what should v2 do?" question almost answered itself: <em>add HBM</em>. Every TPU since has had it.</p>
     </div>
 </section>
 
@@ -440,22 +440,22 @@
             <line class="gr" x1="60" y1="120" x2="660" y2="120"/>
             <text x="56" y="223" class="lbl" text-anchor="end">9.2</text>
             <text x="56" y="123" class="lbl" text-anchor="end">92</text>
-            <!-- compute roof at 92 TOPS = y=120, kink at intensity ~2700 (92e12 / 34e9) -->
-            <line class="roof-c" x1="430" y1="120" x2="660" y2="120"/>
+            <!-- compute roof at 92 TOPS = y=120; ridge at 1350 ops/weight byte (Jouppi et al. Fig. 5) -> x = 160 + 120*log10(135) = 416 -->
+            <line class="roof-c" x1="416" y1="120" x2="660" y2="120"/>
             <text x="640" y="115" class="lbl" text-anchor="end" fill="#355ec6">peak compute 92 TOPS</text>
-            <!-- memory roof: log-log line slope 1, passing through (3 MIN/byte, ~92 TOPS) at 34 GB/s -->
-            <line class="roof-m" x1="60" y1="320" x2="430" y2="120"/>
-            <text x="120" y="220" class="lbl" fill="#ee3218">DDR3 roof = 34 GB/s</text>
+            <!-- memory roof: slope 1 on log-log (100 px per decade of TOPS, 120 px per decade of intensity), meeting the compute roof at the ridge -->
+            <line class="roof-m" x1="176" y1="320" x2="416" y2="120"/>
+            <text x="230" y="150" class="lbl" text-anchor="middle" fill="#ee3218">DDR3 roof = 34 GB/s</text>
             <!-- workload points -->
-            <circle class="pt" cx="180" cy="280" r="6"/><text x="190" y="284" class="lbl">LSTM0 (~14 ops/byte)</text>
-            <circle class="pt" cx="220" cy="265" r="6"/><text x="230" y="270" class="lbl">LSTM1 (~22)</text>
-            <circle class="pt" cx="280" cy="245" r="6"/><text x="290" y="250" class="lbl">MLP (~85)</text>
-            <circle class="pt" cx="380" cy="170" r="6"/><text x="390" y="172" class="lbl">CNN0 (~620)</text>
-            <circle class="pt" cx="430" cy="125" r="6"/><text x="440" y="125" class="lbl">CNN1 (~2900) — compute-bound</text>
+            <circle class="pt" cx="257" cy="260" r="6"/><text x="185" y="246" class="lbl" text-anchor="middle">LSTM0 (64, 3.7)</text>
+            <circle class="pt" cx="278" cy="272" r="6"/><text x="290" y="294" class="lbl" text-anchor="middle">LSTM1 (96, 2.8)</text>
+            <circle class="pt" cx="316" cy="207" r="6"/><text x="245" y="204" class="lbl" text-anchor="middle">MLP0 (200, 12.3)</text>
+            <circle class="pt" cx="455" cy="123" r="6"/><text x="470" y="145" class="lbl" text-anchor="middle">CNN0 (2888, 86 TOPS)</text>
+            <circle class="pt" cx="429" cy="202" r="6"/><text x="440" y="226" class="lbl" text-anchor="middle">CNN1 (1750, 14.1 TOPS)</text>
         </svg>
     </div>
 
-    <p>The plot is schematic; the workload labels follow Jouppi et al. CNN1 (which is convolution-heavy, like AlexNet) sits at the kink &mdash; achieving close to peak. LSTMs sit far below the memory roof &mdash; bandwidth-starved. <strong>Half the production workloads in 2016 looked more like the LSTMs than the CNNs.</strong></p>
+    <p>Points use Jouppi et al.'s operational intensities (ops per weight byte, Table 1) and measured TOPS (Table 3). CNN0 sits at the kink at 86 TOPS; CNN1, despite its high intensity, reaches only 14.1 TOPS (weight-load stalls, shallow layers). The MLPs and LSTMs sit on the memory roof &mdash; bandwidth-starved. <strong>MLPs (61%) and LSTMs (29%) were 90% of the deployed TPU workload in July 2016; CNNs were 5%.</strong></p>
 
     <div class="callout">
         <div class="callout-label">The lesson that designs every later TPU</div>
@@ -474,7 +474,7 @@
             <tbody>
                 <tr><td><strong>RankBrain</strong> (Search)</td><td>Deep neural net for query interpretation</td><td>Latency-sensitive; 10s of billions of queries/day; perf/W matters more than peak.</td></tr>
                 <tr><td><strong>Google Translate</strong> (NMT)</td><td>Encoder-decoder LSTM (later GNMT)</td><td>Large model parameters; bandwidth-bound on v1; still cheaper than CPU.</td></tr>
-                <tr><td><strong>Google Photos</strong></td><td>CNN classifier / labeller</td><td>Compute-bound &mdash; near-ideal v1 workload (CNN1 in the roofline).</td></tr>
+                <tr><td><strong>Google Photos</strong></td><td>CNN classifier / labeller</td><td>Compute-bound &mdash; near-ideal v1 workload.</td></tr>
                 <tr><td><strong>Street View</strong></td><td>CNN OCR</td><td>Compute-bound batch inference at huge scale.</td></tr>
                 <tr><td><strong>Voice / Now / Assistant</strong></td><td>Acoustic model + language model</td><td>Latency-sensitive, real-time.</td></tr>
                 <tr><td><strong>AlphaGo</strong></td><td>Policy + value CNNs</td><td>The headline workload &mdash; Lee Sedol match, March 2016.</td></tr>
@@ -513,7 +513,7 @@
     <div class="slide-number">11</div>
     <h2>What v1 Got Right (And v7 Still Has)</h2>
     <ul>
-        <li><strong>Weight-stationary systolic core.</strong> Every TPU since has been built around the same 2D MAC array. The 256&times;256 of v1 became 128&times;128 (smaller, more numerous) on v2 onwards, but the structure is identical.</li>
+        <li><strong>Weight-stationary systolic core.</strong> Every TPU since has been built around the same 2D MAC array. The 256&times;256 of v1 became 128&times;128 (smaller, more numerous) on v2&ndash;v5, but the structure is identical.</li>
         <li><strong>Software-managed scratchpad memory.</strong> The Unified Buffer is the direct ancestor of VMEM and CMEM in modern TPUs.</li>
         <li><strong>Compiler does the scheduling.</strong> v1's host-issued CISC ops are an early form of what XLA emits for modern chips. The chip never schedules anything itself.</li>
         <li><strong>Drop-in PCIe form factor.</strong> v4i and v5e still drop into existing servers; the integration cost is low.</li>
@@ -531,7 +531,7 @@
     <div class="slide-number">12</div>
     <h2>Cheat Sheet</h2>
     <ul>
-        <li><strong>TSMC 28&nbsp;nm</strong>, &lt;331&nbsp;mm&sup2; die. PCIe Gen3 &times;16 form factor; ~24&ndash;40 W.</li>
+        <li><strong>TSMC 28&nbsp;nm</strong>, &lt;331&nbsp;mm&sup2; die. PCIe Gen3 &times;16 form factor; 28&ndash;40 W measured, 75 W TDP.</li>
         <li><strong>One 256&times;256 INT8 systolic MMU</strong> at 700 MHz &rarr; <strong>92 TOPS</strong> peak.</li>
         <li><strong>24 MiB on-chip Unified Buffer</strong> for activations, software-managed (not a cache).</li>
         <li><strong>4 MiB INT32 accumulator SRAM</strong>, fixed-function activation pipeline (ReLU, pool, norm).</li>
@@ -549,7 +549,7 @@
 </section>
 
 <footer class="footer">
-    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Google_TPUs">Google TPUs</a> series. Sources: Jouppi et al., "In-Datacenter Performance Analysis of a Tensor Processing Unit", ISCA 2017 (arXiv:1704.04760); Google Cloud Blog, "An in-depth look at the first TPU" (May 2016).</p>
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Google_TPUs">Google TPUs</a> series. Sources: Jouppi et al., "In-Datacenter Performance Analysis of a Tensor Processing Unit", ISCA 2017 (arXiv:1704.04760); Google Cloud Blog, "Google supercharges machine learning tasks with TPU custom chip" (19 May 2016).</p>
 </footer>
 
 </body>
